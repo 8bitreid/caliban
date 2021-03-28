@@ -1,21 +1,24 @@
 import sbtcrossproject.CrossPlugin.autoImport.{ crossProject, CrossType }
 
-val mainScala = "2.12.12"
-val allScala  = Seq("2.13.3", mainScala)
+val mainScala = "2.12.13"
+val allScala  = Seq("2.13.5", mainScala)
 
-val akkaVersion           = "2.6.10"
-val catsEffectVersion     = "2.2.0"
+val akkaVersion           = "2.6.13"
+val catsEffectVersion     = "2.4.0"
 val circeVersion          = "0.13.0"
-val http4sVersion         = "0.21.7"
-val playVersion           = "2.8.1"
-val playJsonVersion       = "2.9.1"
-val silencerVersion       = "1.7.1"
-val sttpVersion           = "2.2.9"
-val tapirVersion          = "0.16.16"
-val zioVersion            = "1.0.3"
-val zioInteropCatsVersion = "2.2.0.1"
-val zioConfigVersion      = "1.0.0-RC28"
-val zqueryVersion         = "0.2.5"
+val http4sVersion         = "0.21.20"
+val magnoliaVersion       = "0.17.0"
+val mercatorVersion       = "0.2.1"
+val playVersion           = "2.8.7"
+val playJsonVersion       = "2.9.2"
+val silencerVersion       = "1.7.3"
+val sttpVersion           = "3.2.0"
+val tapirVersion          = "0.17.18"
+val zioVersion            = "1.0.5"
+val zioInteropCatsVersion = "2.3.1.0"
+val zioConfigVersion      = "1.0.2"
+val zqueryVersion         = "0.2.6"
+val zioJsonVersion        = "0.1.3"
 
 inThisBuild(
   List(
@@ -58,6 +61,7 @@ lazy val root = project
   .settings(skip in publish := true)
   .settings(crossScalaVersions := Nil)
   .aggregate(
+    macros,
     core,
     finch,
     http4s,
@@ -74,6 +78,17 @@ lazy val root = project
     federation
   )
 
+lazy val macros = project
+  .in(file("macros"))
+  .settings(name := "caliban-macros")
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.propensive" %% "magnolia" % magnoliaVersion,
+      "com.propensive" %% "mercator" % mercatorVersion
+    )
+  )
+
 lazy val core = project
   .in(file("core"))
   .settings(name := "caliban")
@@ -81,19 +96,21 @@ lazy val core = project
   .settings(
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "com.lihaoyi"       %% "fastparse"    % "2.3.0",
-      "com.propensive"    %% "magnolia"     % "0.17.0",
-      "com.propensive"    %% "mercator"     % "0.2.1",
+      "com.lihaoyi"       %% "fastparse"    % "2.3.2",
+      "com.propensive"    %% "magnolia"     % magnoliaVersion,
+      "com.propensive"    %% "mercator"     % mercatorVersion,
       "dev.zio"           %% "zio"          % zioVersion,
       "dev.zio"           %% "zio-streams"  % zioVersion,
       "dev.zio"           %% "zio-query"    % zqueryVersion,
-      "dev.zio"           %% "zio-test"     % zioVersion % "test",
-      "dev.zio"           %% "zio-test-sbt" % zioVersion % "test",
-      "io.circe"          %% "circe-core"   % circeVersion % Optional,
+      "dev.zio"           %% "zio-test"     % zioVersion      % "test",
+      "dev.zio"           %% "zio-test-sbt" % zioVersion      % "test",
+      "io.circe"          %% "circe-core"   % circeVersion    % Optional,
       "com.typesafe.play" %% "play-json"    % playJsonVersion % Optional,
+      "dev.zio"           %% "zio-json"     % zioJsonVersion  % Optional,
       compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
     )
   )
+  .dependsOn(macros)
   .settings(
     fork in Test := true,
     fork in run := true
@@ -106,13 +123,13 @@ lazy val tools = project
   .settings(
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "org.scalameta"                %% "scalafmt-dynamic"              % "2.4.2",
-      "org.scalameta"                %% "scalafmt-core"                 % "2.4.2",
-      "com.softwaremill.sttp.client" %% "async-http-client-backend-zio" % sttpVersion,
-      "dev.zio"                      %% "zio-config"                    % zioConfigVersion,
-      "dev.zio"                      %% "zio-config-magnolia"           % zioConfigVersion,
-      "dev.zio"                      %% "zio-test"                      % zioVersion % "test",
-      "dev.zio"                      %% "zio-test-sbt"                  % zioVersion % "test"
+      "org.scalameta"                 %% "scalafmt-dynamic"              % "2.7.5",
+      "org.scalameta"                 %% "scalafmt-core"                 % "2.7.5",
+      "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
+      "dev.zio"                       %% "zio-config"                    % zioConfigVersion,
+      "dev.zio"                       %% "zio-config-magnolia"           % zioConfigVersion,
+      "dev.zio"                       %% "zio-test"                      % zioVersion % "test",
+      "dev.zio"                       %% "zio-test-sbt"                  % zioVersion % "test"
     )
   )
   .dependsOn(core, clientJVM)
@@ -123,11 +140,26 @@ lazy val codegenSbt = project
   .settings(commonSettings)
   .settings(
     sbtPlugin := true,
-    crossScalaVersions := Seq("2.12.12"),
+    crossScalaVersions := Seq("2.12.13"),
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-test-sbt" % zioVersion % "test"
     )
+  )
+  .enablePlugins(SbtPlugin)
+  .settings(
+    scriptedLaunchOpts := {
+      scriptedLaunchOpts.value ++
+        Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
+    },
+    scriptedBufferLog := false,
+    scriptedDependencies := {
+      (macros / publishLocal).value
+      (core / publishLocal).value
+      (clientJVM / publishLocal).value
+      (tools / publishLocal).value
+      publishLocal.value
+    }
   )
   .dependsOn(tools)
 
@@ -151,7 +183,7 @@ lazy val monixInterop = project
     libraryDependencies ++= Seq(
       "dev.zio"  %% "zio-interop-reactivestreams" % "1.0.3.5-RC12",
       "dev.zio"  %% "zio-interop-cats"            % zioInteropCatsVersion,
-      "io.monix" %% "monix"                       % "3.2.2"
+      "io.monix" %% "monix"                       % "3.3.0"
     )
   )
   .dependsOn(core)
@@ -163,10 +195,10 @@ lazy val tapirInterop = project
   .settings(
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.tapir" %% "tapir-core"   % tapirVersion,
-      "dev.zio"                     %% "zio-test"     % zioVersion % "test",
-      "dev.zio"                     %% "zio-test-sbt" % zioVersion % "test",
-      compilerPlugin(("org.typelevel" %% "kind-projector" % "0.11.0").cross(CrossVersion.full))
+      "com.softwaremill.sttp.tapir"   %% "tapir-core"     % tapirVersion,
+      "dev.zio"                       %% "zio-test"       % zioVersion % "test",
+      "dev.zio"                       %% "zio-test-sbt"   % zioVersion % "test",
+      compilerPlugin(("org.typelevel" %% "kind-projector" % "0.11.3").cross(CrossVersion.full))
     )
   )
   .dependsOn(core)
@@ -177,18 +209,18 @@ lazy val http4s = project
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "dev.zio"       %% "zio-interop-cats"    % zioInteropCatsVersion,
-      "org.typelevel" %% "cats-effect"         % catsEffectVersion,
-      "org.http4s"    %% "http4s-dsl"          % http4sVersion,
-      "org.http4s"    %% "http4s-circe"        % http4sVersion,
-      "org.http4s"    %% "http4s-blaze-server" % http4sVersion,
-      "io.circe"      %% "circe-parser"        % circeVersion,
+      "dev.zio"          %% "zio-interop-cats"    % zioInteropCatsVersion,
+      "org.typelevel"    %% "cats-effect"         % catsEffectVersion,
+      "org.http4s"       %% "http4s-dsl"          % http4sVersion,
+      "org.http4s"       %% "http4s-circe"        % http4sVersion,
+      "org.http4s"       %% "http4s-blaze-server" % http4sVersion,
+      "io.circe"         %% "circe-parser"        % circeVersion,
       compilerPlugin(
-        ("org.typelevel" %% "kind-projector" % "0.11.0")
+        ("org.typelevel" %% "kind-projector"      % "0.11.3")
           .cross(CrossVersion.full)
       ),
       compilerPlugin("com.github.ghik" % "silencer-plugin" % silencerVersion cross CrossVersion.full),
-      "com.github.ghik" % "silencer-lib" % silencerVersion % Provided cross CrossVersion.full
+      "com.github.ghik"   % "silencer-lib"        % silencerVersion % Provided cross CrossVersion.full
     )
   )
   .dependsOn(core)
@@ -199,12 +231,13 @@ lazy val akkaHttp = project
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-http"           % "10.2.1",
-      "com.typesafe.akka" %% "akka-stream"         % akkaVersion,
-      "de.heikoseeberger" %% "akka-http-circe"     % "1.35.0" % Optional,
-      "de.heikoseeberger" %% "akka-http-play-json" % "1.35.0" % Optional,
+      "com.typesafe.akka" %% "akka-http"                  % "10.2.4",
+      "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
+      "com.typesafe.akka" %% "akka-stream"                % akkaVersion,
+      "de.heikoseeberger" %% "akka-http-circe"            % "1.36.0" % Optional,
+      "de.heikoseeberger" %% "akka-http-play-json"        % "1.36.0" % Optional,
       compilerPlugin(
-        ("org.typelevel" %% "kind-projector" % "0.11.0")
+        ("org.typelevel"  %% "kind-projector"             % "0.11.3")
           .cross(CrossVersion.full)
       )
     )
@@ -226,30 +259,25 @@ lazy val finch = project
   )
   .dependsOn(core)
 
-//lazy val uzhttp = project
-//  .in(file("adapters/uzhttp"))
-//  .settings(name := "caliban-uzhttp")
-//  .settings(commonSettings)
-//  .settings(
-//    libraryDependencies ++= Seq(
-//      "org.polynote" %% "uzhttp"       % "0.2.4",
-//      "io.circe"     %% "circe-parser" % "0.13.0"
-//    )
-//  )
-//  .dependsOn(core)
-
 lazy val play = project
   .in(file("adapters/play"))
   .settings(name := "caliban-play")
   .settings(commonSettings)
   .settings(
+    testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play" % playVersion
+      "com.typesafe.play"             %% "play"                          % playVersion,
+      "dev.zio"                       %% "zio-test"                      % zioVersion   % "test",
+      "dev.zio"                       %% "zio-test-sbt"                  % zioVersion   % "test",
+      "com.typesafe.play"             %% "play-akka-http-server"         % playVersion  % "test",
+      "io.circe"                      %% "circe-generic"                 % circeVersion % "test",
+      "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion  % "test",
+      "com.softwaremill.sttp.client3" %% "circe"                         % sttpVersion  % "test"
     )
   )
   .dependsOn(core)
 
-lazy val client = crossProject(JSPlatform, JVMPlatform)
+lazy val client    = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("client"))
   .settings(name := "caliban-client")
@@ -257,16 +285,16 @@ lazy val client = crossProject(JSPlatform, JVMPlatform)
   .settings(
     testFrameworks := Seq(new TestFramework("zio.test.sbt.ZTestFramework")),
     libraryDependencies ++= Seq(
-      "io.circe"                     %%% "circe-core"   % circeVersion,
-      "com.softwaremill.sttp.client" %%% "core"         % sttpVersion,
-      "com.softwaremill.sttp.client" %%% "circe"        % sttpVersion,
-      "dev.zio"                      %%% "zio-test"     % zioVersion % "test",
-      "dev.zio"                      %%% "zio-test-sbt" % zioVersion % "test"
+      "io.circe"                      %%% "circe-core"   % circeVersion,
+      "com.softwaremill.sttp.client3" %%% "core"         % sttpVersion,
+      "com.softwaremill.sttp.client3" %%% "circe"        % sttpVersion,
+      "dev.zio"                       %%% "zio-test"     % zioVersion % "test",
+      "dev.zio"                       %%% "zio-test-sbt" % zioVersion % "test"
     )
   )
 lazy val clientJVM = client.jvm
-lazy val clientJS = client.js.settings(
-  libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.0.0" % Test
+lazy val clientJS  = client.js.settings(
+  libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.2.0" % Test
 )
 
 lazy val examples = project
@@ -275,15 +303,15 @@ lazy val examples = project
   .settings(skip in publish := true)
   .settings(
     libraryDependencies ++= Seq(
-      "de.heikoseeberger"            %% "akka-http-circe"               % "1.35.0",
-      "com.softwaremill.sttp.client" %% "async-http-client-backend-zio" % sttpVersion,
-      "com.softwaremill.sttp.tapir"  %% "tapir-json-circe"              % tapirVersion,
-      "io.circe"                     %% "circe-generic"                 % circeVersion,
-      "com.typesafe.play"            %% "play-akka-http-server"         % playVersion,
-      "com.typesafe.akka"            %% "akka-actor-typed"              % akkaVersion
+      "de.heikoseeberger"             %% "akka-http-circe"               % "1.36.0",
+      "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
+      "com.softwaremill.sttp.tapir"   %% "tapir-json-circe"              % tapirVersion,
+      "io.circe"                      %% "circe-generic"                 % circeVersion,
+      "com.typesafe.play"             %% "play-akka-http-server"         % playVersion,
+      "com.typesafe.akka"             %% "akka-actor-typed"              % akkaVersion
     )
   )
-  .dependsOn(akkaHttp, http4s, catsInterop, finch, /*uzhttp,*/ play, monixInterop, tapirInterop, clientJVM, federation)
+  .dependsOn(akkaHttp, http4s, catsInterop, finch, play, monixInterop, tapirInterop, clientJVM, federation)
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
@@ -310,6 +338,12 @@ lazy val federation = project
       "dev.zio" %% "zio-test"     % zioVersion % Test,
       "dev.zio" %% "zio-test-sbt" % zioVersion % Test,
       compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
+    ),
+    PB.targets in Compile := Seq(
+      scalapb.gen(grpc = false) -> (sourceManaged in Compile).value / "scalapb"
+    ),
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
     ),
     scalacOptions += "-Ywarn-unused:-locals"
   )
@@ -349,6 +383,6 @@ val commonSettings = Def.settings(
       Seq(
         "-Xlint:-byname-implicit"
       )
-    case _ => Nil
+    case _             => Nil
   })
 )

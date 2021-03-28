@@ -11,22 +11,51 @@ import caliban.schema.Annotations.GQLDirective
 import caliban.schema.GenericSchema
 import caliban.wrappers.ApolloCaching.CacheControl
 import caliban.wrappers.ApolloPersistedQueries.apolloPersistedQueries
-import caliban.wrappers.Wrapper.ExecutionWrapper
+import caliban.wrappers.Wrapper.{ ExecutionWrapper, FieldWrapper }
 import caliban.wrappers.Wrappers._
-import caliban.{ GraphQL, GraphQLRequest, GraphQLResponse, RootResolver, Value }
+import caliban._
 import io.circe.syntax._
 import zio.clock.Clock
 import zio.duration._
+import zio.query.ZQuery
 import zio.test.Assertion._
 import zio.test._
 import zio.test.environment.{ TestClock, TestEnvironment }
-import zio.{ clock, Promise, UIO, URIO, ZIO }
+import zio.{ clock, Promise, Ref, UIO, URIO, ZIO }
 
 import scala.language.postfixOps
 
 object WrappersSpec extends DefaultRunnableSpec {
   override def spec: ZSpec[TestEnvironment, Any] =
     suite("WrappersSpec")(
+      testM("wrapPureValues false") {
+        case class Test(a: Int, b: UIO[Int])
+        for {
+          ref         <- Ref.make[Int](0)
+          wrapper      = FieldWrapper[Any](
+                           { case (query, _) => ZQuery.fromEffect(ref.update(_ + 1)) *> query },
+                           wrapPureValues = false
+                         )
+          interpreter <- (graphQL(RootResolver(Test(1, UIO(2)))) @@ wrapper).interpreter.orDie
+          query        = gqldoc("""{ a b }""")
+          _           <- interpreter.execute(query)
+          counter     <- ref.get
+        } yield assert(counter)(equalTo(1))
+      },
+      testM("wrapPureValues true") {
+        case class Test(a: Int, b: UIO[Int])
+        for {
+          ref         <- Ref.make[Int](0)
+          wrapper      = FieldWrapper[Any](
+                           { case (query, _) => ZQuery.fromEffect(ref.update(_ + 1)) *> query },
+                           wrapPureValues = true
+                         )
+          interpreter <- (graphQL(RootResolver(Test(1, UIO(2)))) @@ wrapper).interpreter.orDie
+          query        = gqldoc("""{ a b }""")
+          _           <- interpreter.execute(query)
+          counter     <- ref.get
+        } yield assert(counter)(equalTo(2))
+      },
       testM("Max fields") {
         case class A(b: B)
         case class B(c: Int)
@@ -91,7 +120,7 @@ object WrappersSpec extends DefaultRunnableSpec {
 
         val interpreter =
           (graphQL(RootResolver(Test(clock.sleep(2 minutes).as(0)))) @@ timeout(1 minute)).interpreter
-        val query = gqldoc("""
+        val query       = gqldoc("""
               {
                 a
               }""")
@@ -219,7 +248,7 @@ object WrappersSpec extends DefaultRunnableSpec {
 
           (for {
             interpreter <- (graphQL(RootResolver(Test("ok"))) @@ apolloPersistedQueries).interpreter
-            extensions  = Some(Map("persistedQuery" -> ObjectValue(Map("sha256Hash" -> StringValue("my-hash")))))
+            extensions   = Some(Map("persistedQuery" -> ObjectValue(Map("sha256Hash" -> StringValue("my-hash")))))
             _           <- interpreter.executeRequest(GraphQLRequest(query = Some("{test}"), extensions = extensions))
             result      <- interpreter.executeRequest(GraphQLRequest(extensions = extensions))
           } yield assert(result.asJson.noSpaces)(equalTo("""{"data":{"test":"ok"}}""")))
@@ -227,7 +256,7 @@ object WrappersSpec extends DefaultRunnableSpec {
         }
       ),
       testM("custom query directive") {
-        val customWrapper = ExecutionWrapper[Any](f =>
+        val customWrapper        = ExecutionWrapper[Any](f =>
           request => {
             if (request.field.directives.exists(_.name == "customQueryDirective")) {
               UIO {
@@ -244,13 +273,13 @@ object WrappersSpec extends DefaultRunnableSpec {
           ),
           Nil
         )
-        val interpreter = (graphQL(
+        val interpreter          = (graphQL(
           resolver,
           List(
             customQueryDirective
           )
         ) @@ customWrapper).interpreter
-        val query = gqldoc("""
+        val query                = gqldoc("""
             query @customQueryDirective {
               characters {
                 name
